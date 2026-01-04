@@ -1,8 +1,48 @@
-<html>
+<!DOCTYPE html>
+<html lang="en">
+  <!-- hand written by yours truly -->
   <head>
     <title>Soundcloud Likes Search</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=700px">
+    <style>
+      @media screen and (max-device-width: 480px) {
+        body {
+          /* make iPhone display the same as browser */
+          -webkit-text-size-adjust: 100%;
+        }
+      }
+      html {
+        margin: 0;
+        padding: 0;
+      }
+      body {
+        margin: 0;
+        padding: 0;
+        background-color: #000;
+      }
+      #page {
+        width: "720px";
+        background-color: #333;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+      }
+    </style>
   </head>
   <body>
-    <p>test</p>
+    <div id="page">
+      <div id="header">SoundCloud Likes Search</div>
+      <div id="search">
+        <label for="username">Username:</label>
+        <input type="text" id="username" placeholder="Username" required>
+        <label for="username">Filter:</label>
+        <input type="text" id="filter" placeholder="Leave blank for all">
+        <input type="submit" value="Search / List">
+      </div>
+      <div id="results">
+        
+      </div>
+    </div>
   </body>
 </html>
