@@ -22,11 +22,98 @@
         background-color: #000;
       }
       #page {
-        width: "720px";
+        width: 720px;
         background-color: #333;
         display: flex;
         flex-direction: column;
         align-items: center;
+        color: white;
+        font-family: monospace;
+        margin-left: auto;
+        margin-right: auto;
+        gap: 8px;
+        padding-top: 8px;
+        padding-bottom: 8px;
+      }
+      #header {
+        font-size: 24px;
+      }
+      #search {
+        display: flex;
+        justify-content: space-evenly;
+        width: 100%;
+      }
+      #results {
+        width: 100%;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 4px;
+      }
+      .entry {
+        display: flex;
+        flex-direction: column;
+        width: 80%;
+        background-color: black;
+        padding: 4px;
+      }
+      .art {
+        position: relative;
+        width: 75px;
+        height: 75px;
+      }
+      img.artwork_url {
+        display: block;
+        width: 70px;
+      }
+      img.avatar_url {
+        display: block;
+        width: 30px;
+        position: absolute;
+        top: 45px;
+        left: 45px;
+      }
+      a {
+        color: orange;
+        text-decoration: none;
+      }
+      .id {
+        align-self: flex-end;
+        .permalink_url {
+          font-size: 10px;
+        }
+      }
+      .title {
+        font-size: 16px;
+        .permalink_url {
+        }
+      }
+      .song {
+        display: flex;
+        gap: 8px;
+        align-items: stretch;
+      }
+      .datetime {
+        font-size: 10px;
+        align-self: flex-end;
+      }
+      .info {
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        gap: 2px;
+        flex-grow: 2;
+      }
+      .taglist {
+        font-size: 10px;
+        align-self: flex-end;
+      }
+      .metadata {
+        display: flex;
+        flex-direction: column;
+      }
+      #results_template {
+        display: none;
       }
     </style>
   </head>
@@ -34,14 +121,39 @@
     <div id="page">
       <div id="header">SoundCloud Likes Search</div>
       <div id="search">
-        <label for="username">Username:</label>
-        <input type="text" id="username" placeholder="Username" required>
-        <label for="username">Filter:</label>
-        <input type="text" id="filter" placeholder="Leave blank for all">
-        <input type="submit" value="Search / List">
+        <div>
+          <label for="username">Username:</label>
+          <input type="text" id="username" placeholder="Username" required>
+        </div>
+        <div>
+          <label for="username">Filter:</label>
+          <input type="text" id="filter" placeholder="Leave blank for all">
+        </div>
+        <div>
+          <input type="submit" value="Search / List">
+        </div>
       </div>
       <div id="results">
-        
+      </div>
+      <div id="results_template">
+        <div class="entry">
+          <div class="song">
+            <div class="art">
+              <img class="artwork_url" src="https://i1.sndcdn.com/artworks-4axsQ3sQx70jaZwr-viOnMw-large.jpg" />
+              <img class="avatar_url" src="https://i1.sndcdn.com/avatars-EHnOI4OajeqmN8si-YLrjag-large.jpg" />
+            </div>
+            <div class="info">
+              <div>
+                <div class="title"><a href="https://soundcloud.com/janglerr/mirror-rooster" class="permalink_url">mirror & rooster (from extra vaganza)</a></div>
+                <div class="artist_album"><span class="artist">jangler</span><span class="album_artist_sep"> - </span><span class="album">extra vaganza</div>
+              </div>
+              <div class="metadata">
+                <div class="datetime">2024-04-12T13:49:55Z</div>
+                <div class="taglist">[midi, microtonal, prog]</div>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   </body>
