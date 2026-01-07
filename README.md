@@ -35,7 +35,7 @@ I did, they haven't gotten back to me yet (I had to talk to an AI chatbot) so th
 AWS CLI: https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html<br />
 AWS SAM CLI: https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/install-sam-cli.html
 
-You can find `.msi` installers (as well as installers for other systems) linked on each.N
+You can find `.msi` installers (as well as installers for other systems) linked on each
 
 If you haven't set up AWS CLI yet, grab your credentials from AWS Management Console:
 
