@@ -312,7 +312,7 @@ To start the API on port 3000 locally:
 sam local start-api
 ```
 
-However, this requires Docker.
+However, this requires Docker. (sorry)
 
 Alternatively, edit `API_BASE` in **index.html** to point to any endpoint.
 
