@@ -57,14 +57,6 @@ The guided deploy will prompt for stack name and parameters. When asked:
 
 Make sure to answer with `y`. Defaults are generally going to be fine for other prompts. Note what `ApiUrl` is after deploying as you will need to provide it to the frontend / GitHub.
 
-### Re-deploy
-
-Remove guided once you have successfully deployed once:
-
-```sh
-sam build && sam deploy
-```
-
 #### Example deployment output
 
 <details>
@@ -240,6 +232,14 @@ Successfully created/updated stack - soundcloud-proxy in us-east-1
 ```
 
 </details>
+
+### Re-deploy
+
+Remove guided once you have successfully deployed once:
+
+```sh
+sam build && sam deploy
+```
 
 ### Debugging Logs
 
