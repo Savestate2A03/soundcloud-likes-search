@@ -1,6 +1,5 @@
 <!DOCTYPE html>
 <html lang="en">
-  <!-- hand written by yours truly -->
   <head>
     <title>Soundcloud Likes Search</title>
     <meta charset="utf-8">
@@ -43,6 +42,10 @@
         justify-content: space-evenly;
         width: 100%;
       }
+      #status {
+        font-size: 12px;
+        color: #888;
+      }
       #results {
         width: 100%;
         display: flex;
@@ -73,6 +76,12 @@
         top: 45px;
         left: 45px;
       }
+      .art.no-artwork img.avatar_url {
+        position: static;
+        width: 75px;
+        height: 75px;
+        object-fit: cover;
+      }
       a {
         color: orange;
         text-decoration: none;
@@ -86,6 +95,7 @@
       .title {
         font-size: 16px;
         .permalink_url {
+          font-size: inherit
         }
       }
       .song {
@@ -117,22 +127,105 @@
       }
     </style>
     <script>
-      function get_likes(urn) {
+      const API_BASE_URL = '__API_BASE_URL__';
+      const API_BASE = API_BASE_URL.startsWith('__') ? 'http://localhost:3000' : API_BASE_URL;
+
+      let cached_user = null;
+      let cached_likes = null;
+
+      function set_status(msg) {
+        document.getElementById("status").textContent = msg;
+      }
+
+      function clear_results() {
+        document.getElementById("results").innerHTML = '';
+      }
+
+      function render_entry(track, user_avatar) {
+        const template = document.querySelector("#results_template .entry");
+        const entry = template.cloneNode(true);
+
+        const artwork = track.artwork_url;
+        const avatar = track.user?.avatar_url || user_avatar;
+        const art_div = entry.querySelector(".art");
+
+        if (artwork) {
+          entry.querySelector("img.artwork_url").src = artwork;
+          entry.querySelector("img.avatar_url").src = avatar;
+        } else {
+          art_div.classList.add("no-artwork");
+          entry.querySelector("img.artwork_url").remove();
+          entry.querySelector("img.avatar_url").src = avatar;
+        }
+
+        entry.querySelector(".title .permalink_url").href = track.permalink_url;
+        entry.querySelector(".title .permalink_url").textContent = track.title;
+
+        const artist = track.user?.username || '';
+        const album = track.publisher_metadata?.album_title || '';
+
+        entry.querySelector(".artist").textContent = artist;
+        entry.querySelector(".album").textContent = album;
+        entry.querySelector(".album_artist_sep").style.display = album ? '' : 'none';
+
+        entry.querySelector(".datetime").textContent = track.created_at || '';
+
+        const tags = track.tag_list || '';
+        entry.querySelector(".taglist").textContent = tags ? `[${tags}]` : '';
+
+        return entry;
+      }
+
+      function display_likes(likes, filter_text, user_avatar) {
+        clear_results();
+        const results = document.getElementById("results");
+        const filter_lower = filter_text.toLowerCase();
+
+        let count = 0;
+        for (const item of likes) {
+          const track = item.track;
+          if (!track) continue;
+
+          // filter by title / artist / tags
+          if (filter_text) {
+            const searchable = [
+              track.title || '',
+              track.user?.username || '',
+              track.tag_list || '',
+              track.publisher_metadata?.album_title || ''
+            ].join(' ').toLowerCase();
+
+            if (!searchable.includes(filter_lower)) continue;
+          }
+
+          results.appendChild(render_entry(track, user_avatar));
+          count++;
+        }
+
+        set_status(`showing ${count} of ${likes.length} likes`);
+      }
+
+      function get_likes(urn, user_avatar) {
+        set_status('fetching likes...');
+
         const xhr = new XMLHttpRequest();
         xhr.responseType = "json";
-        url = `https://api.soundcloud.com/users/{urn}/likes?limit=100000000&client_id=dH1Xed1fpITYonugor6sw39jvdq58M3h`
+        const url = `${API_BASE}/likes?urn=${urn}&limit=50000`;
 
         xhr.onload = function() {
           if (xhr.readyState === XMLHttpRequest.DONE && xhr.status === 200) {
             const data = xhr.response;
-            alert(`collection size: {data.collection.length}`)
+            cached_likes = data.collection || [];
+            const filter = document.getElementById("filter").value;
+            display_likes(cached_likes, filter, user_avatar);
           } else {
-            alert(`Error ${xhr.status}: ${xhr.statusText}`);
+            const err = xhr.response?.error || xhr.statusText;
+            set_status(`error: ${err}`);
           }
         };
 
-        xhr.onerror = function(e) {
-          alert(`Request failed: {e}`);
+        xhr.onerror = function() {
+          set_status('request failed');
         };
 
         xhr.open("GET", url, true);
@@ -140,27 +233,54 @@
       }
 
       function search() {
-        const username = document.getElementById("username").value;
+        const username = document.getElementById("username").value.trim();
         const filter = document.getElementById("filter").value;
+
+        if (!username) {
+          set_status('enter a username');
+          return;
+        }
+
+        // if same user re-filter from cache
+        if (cached_user && cached_user.username === username && cached_likes) {
+          display_likes(cached_likes, filter, cached_user.avatar_url);
+          return;
+        }
+
+        set_status('resolving urn...');
+        clear_results();
+
         const xhr = new XMLHttpRequest();
         xhr.responseType = "json";
+        const url = `${API_BASE}/username?username=${encodeURIComponent(username)}`;
 
         xhr.onload = function() {
           if (xhr.readyState === XMLHttpRequest.DONE && xhr.status === 200) {
             const data = xhr.response;
-            get_likes(data.urn.split(":")[2]) // soundcloud:users:93060898
+            cached_user = data;
+            cached_likes = null;
+            const urn = data.urn.split(":")[2]; // soundcloud:users:100420690
+            get_likes(urn, data.avatar_url);
           } else {
-            alert(`Error ${xhr.status}: ${xhr.statusText}`);
+            const err = xhr.response?.error || xhr.statusText;
+            set_status(`error: ${err}`);
           }
         };
 
-        xhr.onerror = function(e) {
-          alert(`Request failed: {e}`);
+        xhr.onerror = function() {
+          set_status('request failed');
         };
 
-        url = `https://api.soundcloud.com/resolve?url=https://soundcloud.com/{username}&client_id=dH1Xed1fpITYonugor6sw39jvdq58M3h`;
         xhr.open("GET", url, true);
         xhr.send();
+      }
+
+      // use cached likes for additional filtering
+      function apply_filter() {
+        if (cached_likes && cached_user) {
+          const filter = document.getElementById("filter").value;
+          display_likes(cached_likes, filter, cached_user.avatar_url);
+        }
       }
     </script>
   </head>
@@ -173,30 +293,31 @@
           <input type="text" id="username" placeholder="Username" required>
         </div>
         <div>
-          <label for="username">Filter:</label>
-          <input type="text" id="filter" placeholder="Leave blank for all">
+          <label for="filter">Filter:</label>
+          <input type="text" id="filter" placeholder="title/artist/tags" oninput="apply_filter()">
         </div>
         <div>
-          <input type="submit" onclick="search()" value="Search / List">
+          <input type="submit" onclick="search()" value="Get Likes">
         </div>
       </div>
+      <div id="status"></div>
       <div id="results">
       </div>
       <div id="results_template">
         <div class="entry">
           <div class="song">
             <div class="art">
-              <img class="artwork_url" src="https://i1.sndcdn.com/artworks-4axsQ3sQx70jaZwr-viOnMw-large.jpg" />
-              <img class="avatar_url" src="https://i1.sndcdn.com/avatars-EHnOI4OajeqmN8si-YLrjag-large.jpg" />
+              <img class="artwork_url" onerror="this.onerror=null; this.parentElement.classList.add('no-artwork'); this.remove()" />
+              <img class="avatar_url" onerror="this.onerror=null; this.src='https://sav.estate/files/unknown_avatar_url.png'" />
             </div>
             <div class="info">
               <div>
-                <div class="title"><a href="https://soundcloud.com/janglerr/mirror-rooster" class="permalink_url">mirror & rooster (from extra vaganza)</a></div>
-                <div class="artist_album"><span class="artist">jangler</span><span class="album_artist_sep"> - </span><span class="album">extra vaganza</div>
+                <div class="title"><a href="" class="permalink_url"></a></div>
+                <div class="artist_album"><span class="artist"></span><span class="album_artist_sep"> - </span><span class="album"></span></div>
               </div>
               <div class="metadata">
-                <div class="datetime">2024-04-12T13:49:55Z</div>
-                <div class="taglist">[midi, microtonal, prog]</div>
+                <div class="datetime"></div>
+                <div class="taglist"></div>
               </div>
             </div>
           </div>

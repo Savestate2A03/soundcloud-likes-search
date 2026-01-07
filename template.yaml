@@ -1,0 +1,108 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: SoundCloud Likes Search API Proxy
+
+Parameters:
+  TableName:
+    Type: String
+    Default: soundcloud-proxy
+    Description: DynamoDB table name
+  RateLimitSeconds:
+    Type: Number
+    Default: 1
+    Description: Rate limit interval in seconds
+  ClientIdTtlSeconds:
+    Type: Number
+    Default: 120
+    Description: Client ID cache TTL in seconds
+
+Globals:
+  Function:
+    Timeout: 30
+    Runtime: python3.12
+    MemorySize: 256
+
+Resources:
+  SoundcloudProxyTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Ref TableName
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: pk
+          AttributeType: S
+      KeySchema:
+        - AttributeName: pk
+          KeyType: HASH
+
+  SoundcloudProxyFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: soundcloud-proxy
+      Handler: handler.lambda_handler
+      CodeUri: .
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref TableName
+          RATE_LIMIT_SECONDS: !Ref RateLimitSeconds
+          CLIENT_ID_TTL_SECONDS: !Ref ClientIdTtlSeconds
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref SoundcloudProxyTable
+      Events:
+        ApiUsername:
+          Type: Api
+          Properties:
+            Path: /username
+            Method: GET
+            RestApiId: !Ref SoundcloudProxyApi
+        ApiLikes:
+          Type: Api
+          Properties:
+            Path: /likes
+            Method: GET
+            RestApiId: !Ref SoundcloudProxyApi
+        ApiHealth:
+          Type: Api
+          Properties:
+            Path: /health
+            Method: GET
+            RestApiId: !Ref SoundcloudProxyApi
+        ApiOptionsUsername:
+          Type: Api
+          Properties:
+            Path: /username
+            Method: OPTIONS
+            RestApiId: !Ref SoundcloudProxyApi
+        ApiOptionsLikes:
+          Type: Api
+          Properties:
+            Path: /likes
+            Method: OPTIONS
+            RestApiId: !Ref SoundcloudProxyApi
+        ApiOptionsHealth:
+          Type: Api
+          Properties:
+            Path: /health
+            Method: OPTIONS
+            RestApiId: !Ref SoundcloudProxyApi
+
+  SoundcloudProxyApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      StageName: prod
+      Cors:
+        AllowOrigin: "'*'"
+        AllowMethods: "'GET, OPTIONS'"
+        AllowHeaders: "'Content-Type'"
+
+Outputs:
+  ApiUrl:
+    Description: API Gateway endpoint URL
+    Value: !Sub "https://${SoundcloudProxyApi}.execute-api.${AWS::Region}.amazonaws.com/prod"
+  FunctionArn:
+    Description: Lambda function ARN
+    Value: !GetAtt SoundcloudProxyFunction.Arn
+  TableArn:
+    Description: DynamoDB table ARN
+    Value: !GetAtt SoundcloudProxyTable.Arn
