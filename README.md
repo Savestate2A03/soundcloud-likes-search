@@ -55,11 +55,15 @@ sam build && sam deploy --guided
 The guided deploy will prompt for stack name and parameters. When asked:
 > SoundcloudProxyFunction has no authentication. Is this okay? [y\/N]:
 
-Make sure to answer with `y`. Defaults are generally going to be fine for other prompts.
+Make sure to answer with `y`. Defaults are generally going to be fine for other prompts. Note what `ApiUrl` is after deploying as you will need to provide it to the frontend / GitHub.
 
-Note what `ApiUrl` is after deploying as you will need to provide it to the frontend / GitHub.
+### Re-deploy
 
-This is also how you re-deploy the environment on top of the existing one.
+Remove guided once you have successfully deployed once:
+
+```sh
+sam build && sam deploy
+```
 
 #### Example deployment output
 
