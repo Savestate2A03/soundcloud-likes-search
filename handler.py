@@ -1,6 +1,6 @@
 # soundcloud API proxy for aws lambda
-# - rate limited (1 request per 5 seconds globally)
-# - gets client_id every 5 minutes
+# - rate limited (1 request per second globally)
+# - gets client_id every 2 minutes
 # - exposes only /resolve and /likes
 
 from __future__ import annotations
