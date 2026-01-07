@@ -62,8 +62,10 @@ Note what `ApiUrl` is after deploying as you will need to provide it to the fron
 This is also how you re-deploy the environment on top of the existing one.
 
 #### Example deployment output
+
 <details>
 <summary>Click to view output</summary>
+ 
 ```sh
 C:\Users\Savestate\dev\soundcloud-likes-search>sam build && sam deploy --guided
 Building codeuri: C:\Users\Savestate\dev\soundcloud-likes-search runtime: python3.12 architecture: x86_64 functions: SoundcloudProxyFunction
@@ -232,6 +234,7 @@ Value               arn:aws:dynamodb:us-east-1:56785678567856:table/soundcloud-p
 
 Successfully created/updated stack - soundcloud-proxy in us-east-1
 ```
+
 </details>
 
 ### Debugging Logs
