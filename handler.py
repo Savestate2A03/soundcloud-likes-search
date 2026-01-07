@@ -65,7 +65,8 @@ def get_cached_client_id() -> Optional[str]:
         response = TABLE.get_item(Key={'pk': 'client_id'})
         if 'Item' in response:
             item = response['Item']
-            if time.time() < float(str(item.get('expires_at', 0))):
+            expires_at = float(str(item.get('expires_at', 0)))  # Decimal -> float
+            if time.time() < expires_at:
                 return str(item['value'])
             
     except Exception as error:
@@ -75,11 +76,13 @@ def get_cached_client_id() -> Optional[str]:
 
 # attempt to save client_id to dynamodb
 def save_client_id(client_id: str) -> None:
+    ttl = int(CLIENT_ID_TTL_SECONDS)
+
     try:
         TABLE.put_item(Item={
             'pk': 'client_id',
             'value': client_id,
-            'expires_at': Decimal(str(time.time() + CLIENT_ID_TTL_SECONDS)),
+            'expires_at': Decimal(str(time.time() + ttl)),
             'updated_at': Decimal(str(time.time()))
         })
 
@@ -88,7 +91,8 @@ def save_client_id(client_id: str) -> None:
 
 # make sure requests aren't being made beyond the rate limit
 def check_rate_limit() -> bool:
-    now = time.time()
+    now = Decimal(str(time.time()))
+    threshold = Decimal(str(time.time() - int(RATE_LIMIT_SECONDS)))
 
     try:
         TABLE.update_item(
@@ -96,8 +100,8 @@ def check_rate_limit() -> bool:
             UpdateExpression='SET last_request = :now',
             ConditionExpression='attribute_not_exists(last_request) OR last_request < :threshold',
             ExpressionAttributeValues={
-                ':now': Decimal(str(now)),
-                ':threshold': Decimal(str(now - RATE_LIMIT_SECONDS))
+                ':now': now,
+                ':threshold': threshold
             },
             ReturnValues='ALL_NEW'
         )
@@ -227,15 +231,6 @@ def lambda_handler(event: APIGatewayProxyEventV1, context: context_.Context) -> 
     if event.get('httpMethod') == 'OPTIONS':
         return cors(200, '')
 
-    # check rate limit
-    if not check_rate_limit():
-        body = {
-            'error': 'RATE_LIMITED_ERROR',
-            'message': f'PLEASE WAIT {RATE_LIMIT_SECONDS} SECONDS AND TRY AGAIN',
-            'retry_after': RATE_LIMIT_SECONDS
-        }
-        return cors(429, body)
-
     ### ENDPOINTS ##############################################
     try:
         path = event.get('path', '')
@@ -278,6 +273,16 @@ def lambda_handler(event: APIGatewayProxyEventV1, context: context_.Context) -> 
 
         ### /likes #############################################
         if path == '/likes':
+
+            # check rate limit
+            if not check_rate_limit():
+                body = {
+                    'error': 'RATE_LIMITED_ERROR',
+                    'message': f'PLEASE WAIT {RATE_LIMIT_SECONDS} SECONDS AND TRY AGAIN',
+                    'retry_after': RATE_LIMIT_SECONDS
+                }
+                return cors(429, body)
+            
             urn = query_params.get('urn')
 
             if not urn:
@@ -294,7 +299,8 @@ def lambda_handler(event: APIGatewayProxyEventV1, context: context_.Context) -> 
                     'type': 'invalid'
                 })
 
-            limit = min(query_params.get('limit', 50000), 50000)
+            limit = min(int(query_params.get('limit', 50000)), 50000)
+
             data = proxy_soundcloud(
                 f'/users/{urn}/likes',
                 {'limit': limit}
