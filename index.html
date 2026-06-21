@@ -128,10 +128,15 @@
     </style>
     <script>
       const API_BASE_URL = '__API_BASE_URL__';
-      const API_BASE = API_BASE_URL.startsWith('__') ? 'http://localhost:3000' : API_BASE_URL;
+      const API_BASE = (API_BASE_URL.startsWith('__') ? 'http://localhost:3000' : API_BASE_URL).replace(/\/$/, '');
+      const LIKES_LIMIT = 200;
+      const LIKE_REQUEST_DELAY_MS = 1250;
 
       let cached_user = null;
       let cached_likes = null;
+      let cached_likes_estimate = null;
+      let cached_username = null;
+      let active_search_id = 0;
 
       function set_status(msg) {
         document.getElementById("status").textContent = msg;
@@ -139,6 +144,58 @@
 
       function clear_results() {
         document.getElementById("results").innerHTML = '';
+      }
+
+      function sleep(ms) {
+        return new Promise(resolve => setTimeout(resolve, ms));
+      }
+
+      function get_likes_estimate(data) {
+        const value = data?.likes_estimate ?? data?.public_favorites_count ?? data?.likes_count;
+        if (value === null || value === undefined || value === '') return null;
+
+        const number = Number(value);
+        return Number.isFinite(number) ? number : null;
+      }
+
+      function fetch_status(loaded, estimate) {
+        const total = estimate === null ? '?' : `~${estimate}`;
+        return `fetching ${loaded} out of ${total} likes`;
+      }
+
+      function show_status(count, loaded, estimate) {
+        if (estimate === null) {
+          return `showing ${count} of ${loaded} loaded likes`;
+        }
+
+        return `showing ${count} of ${loaded} loaded likes (fetched ${loaded} out of ~${estimate})`;
+      }
+
+      function next_offset_from_href(next_href) {
+        if (!next_href) return null;
+
+        try {
+          return new URL(next_href).searchParams.get("offset");
+        } catch (error) {
+          return null;
+        }
+      }
+
+      async function api_get(path, params) {
+        const response = await fetch(`${API_BASE}${path}?${params.toString()}`);
+        let data = null;
+
+        try {
+          data = await response.json();
+        } catch (error) {
+          data = null;
+        }
+
+        if (!response.ok) {
+          throw new Error(data?.error || response.statusText);
+        }
+
+        return data;
       }
 
       function render_entry(track, user_avatar) {
@@ -176,7 +233,7 @@
         return entry;
       }
 
-      function display_likes(likes, filter_text, user_avatar) {
+      function display_likes(likes, filter_text, user_avatar, status_text = null) {
         clear_results();
         const results = document.getElementById("results");
         const filter_lower = filter_text.toLowerCase();
@@ -202,39 +259,74 @@
           count++;
         }
 
-        set_status(`showing ${count} of ${likes.length} likes`);
+        set_status(status_text || show_status(count, likes.length, cached_likes_estimate));
       }
 
-      function get_likes(urn, user_avatar) {
-        set_status('fetching likes...');
+      async function get_likes(urn, user_avatar, search_id) {
+        cached_likes = [];
+        let next_offset = null;
 
-        const xhr = new XMLHttpRequest();
-        xhr.responseType = "json";
-        const url = `${API_BASE}/likes?urn=${urn}&limit=50000`;
+        set_status(fetch_status(0, cached_likes_estimate));
 
-        xhr.onload = function() {
-          if (xhr.readyState === XMLHttpRequest.DONE && xhr.status === 200) {
-            const data = xhr.response;
-            cached_likes = data.collection || [];
-            const filter = document.getElementById("filter").value;
-            display_likes(cached_likes, filter, user_avatar);
-          } else {
-            const err = xhr.response?.error || xhr.statusText;
-            set_status(`error: ${err}`);
+        while (true) {
+          const params = new URLSearchParams({
+            urn: urn,
+            limit: String(LIKES_LIMIT)
+          });
+
+          if (next_offset) {
+            params.set("offset", next_offset);
           }
-        };
 
-        xhr.onerror = function() {
-          set_status('request failed');
-        };
+          let data;
 
-        xhr.open("GET", url, true);
-        xhr.send();
+          try {
+            data = await api_get("/likes", params);
+          } catch (error) {
+            if (search_id === active_search_id) {
+              set_status(`error: ${error.message}`);
+            }
+            return;
+          }
+
+          if (search_id !== active_search_id) return;
+
+          const page_likes = Array.isArray(data.collection) ? data.collection : [];
+          cached_likes.push(...page_likes);
+
+          const estimate = get_likes_estimate(data);
+          if (estimate !== null) {
+            cached_likes_estimate = estimate;
+          }
+
+          const filter = document.getElementById("filter").value;
+          const next_href = data.next_href || null;
+          const paging_status = next_href ? fetch_status(cached_likes.length, cached_likes_estimate) : null;
+
+          display_likes(cached_likes, filter, user_avatar, paging_status);
+
+          if (!next_href) break;
+
+          next_offset = next_offset_from_href(next_href);
+
+          if (!next_offset) {
+            set_status("error: missing next offset");
+            return;
+          }
+
+          await sleep(LIKE_REQUEST_DELAY_MS);
+
+          if (search_id !== active_search_id) return;
+        }
+
+        const filter = document.getElementById("filter").value;
+        display_likes(cached_likes, filter, user_avatar);
       }
 
-      function search() {
+      async function search() {
         const username = document.getElementById("username").value.trim();
         const filter = document.getElementById("filter").value;
+        const username_key = username.toLowerCase();
 
         if (!username) {
           set_status('enter a username');
@@ -242,7 +334,7 @@
         }
 
         // if same user re-filter from cache
-        if (cached_user && cached_user.username === username && cached_likes) {
+        if (cached_user && cached_username === username_key && cached_likes) {
           display_likes(cached_likes, filter, cached_user.avatar_url);
           return;
         }
@@ -250,29 +342,25 @@
         set_status('resolving urn...');
         clear_results();
 
-        const xhr = new XMLHttpRequest();
-        xhr.responseType = "json";
-        const url = `${API_BASE}/username?username=${encodeURIComponent(username)}`;
+        const search_id = ++active_search_id;
+        const params = new URLSearchParams({username: username});
 
-        xhr.onload = function() {
-          if (xhr.readyState === XMLHttpRequest.DONE && xhr.status === 200) {
-            const data = xhr.response;
-            cached_user = data;
-            cached_likes = null;
-            const urn = data.urn.split(":")[2]; // soundcloud:users:100420690
-            get_likes(urn, data.avatar_url);
-          } else {
-            const err = xhr.response?.error || xhr.statusText;
-            set_status(`error: ${err}`);
+        try {
+          const data = await api_get("/username", params);
+          if (search_id !== active_search_id) return;
+
+          cached_user = data;
+          cached_likes = null;
+          cached_likes_estimate = get_likes_estimate(data);
+          cached_username = username_key;
+
+          const urn = data.urn.split(":")[2]; // soundcloud:users:100420690
+          await get_likes(urn, data.avatar_url, search_id);
+        } catch (error) {
+          if (search_id === active_search_id) {
+            set_status(`error: ${error.message}`);
           }
-        };
-
-        xhr.onerror = function() {
-          set_status('request failed');
-        };
-
-        xhr.open("GET", url, true);
-        xhr.send();
+        }
       }
 
       // use cached likes for additional filtering
