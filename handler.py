@@ -1,7 +1,7 @@
 # soundcloud API proxy for aws lambda
-# - rate limited (1 request per second globally)
+# - rate limited globally
 # - gets client_id every 2 minutes
-# - exposes only /resolve and /likes
+# - exposes /username, /likes, and /health
 
 from __future__ import annotations
 
@@ -30,6 +30,8 @@ SOUNDCLOUD_URL = 'https://soundcloud.com/'
 # defaults, can be overridden via env vars
 RATE_LIMIT_SECONDS = int(os.environ.get('RATE_LIMIT_SECONDS', '1'))
 CLIENT_ID_TTL_SECONDS = int(os.environ.get('CLIENT_ID_TTL_SECONDS', '120'))
+LIKES_LIMIT_DEFAULT = 200
+LIKES_LIMIT_MAX = 200
 
 # < logger > #################################################################
 
@@ -200,7 +202,7 @@ def proxy_soundcloud(endpoint, params) -> Optional[Any]:
     # build GET url query parameters
     base_url = 'https://api-v2.soundcloud.com'
     params['client_id'] = client_id
-    query_string = '&'.join(f"{k}={urllib.parse.quote(str(v))}" for k, v in params.items())
+    query_string = urllib.parse.urlencode(params)
     url = f"{base_url}{endpoint}?{query_string}"
 
     LOGGER.log(f"PROXYING TO: {url}")
@@ -209,6 +211,28 @@ def proxy_soundcloud(endpoint, params) -> Optional[Any]:
         return json.loads(body)
 
     return request(url, to_dict, {'Accept': 'application/json'})
+
+def first_int(*values: Any) -> Optional[int]:
+    for value in values:
+        if value is None or value == '':
+            continue
+
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            continue
+
+    return None
+
+def like_count_fields(user_data: dict[str, Any]) -> dict[str, Optional[int]]:
+    public_favorites_count = first_int(user_data.get('public_favorites_count'))
+    likes_count = first_int(user_data.get('likes_count'))
+
+    return {
+        'public_favorites_count': public_favorites_count,
+        'likes_count': likes_count,
+        'likes_estimate': first_int(public_favorites_count, likes_count)
+    }
 
 # < lambda > #################################################################
 
@@ -267,6 +291,7 @@ def lambda_handler(event: APIGatewayProxyEventV1, context: context_.Context) -> 
                     'username': data.get('username') or '',
                     'permalink_url': data.get('permalink_url') or '',
                     'avatar_url': data.get('avatar_url') or '',
+                    **like_count_fields(data)
                 })
             
             return cors(400, 'USER_RESOLVE_ERROR')
@@ -299,14 +324,53 @@ def lambda_handler(event: APIGatewayProxyEventV1, context: context_.Context) -> 
                     'type': 'invalid'
                 })
 
-            limit = min(int(query_params.get('limit', 50000)), 50000)
+            limit_raw = query_params.get('limit', str(LIKES_LIMIT_DEFAULT))
+
+            try:
+                limit = int(limit_raw)
+            except (TypeError, ValueError):
+                return cors(400, {
+                    'error': 'PARAMETER_ERROR',
+                    'parameter': 'limit',
+                    'type': 'invalid'
+                })
+
+            if limit < 1:
+                return cors(400, {
+                    'error': 'PARAMETER_ERROR',
+                    'parameter': 'limit',
+                    'type': 'invalid'
+                })
+
+            limit = min(limit, LIKES_LIMIT_MAX)
+            offset = query_params.get('offset')
+            first_page = offset in (None, '', '0')
+
+            params = {
+                'limit': limit,
+                'linked_partitioning': 1,
+                'app_locale': 'en'
+            }
+
+            if offset not in (None, ''):
+                params['offset'] = offset
 
             data = proxy_soundcloud(
                 f'/users/{urn}/likes',
-                {'limit': limit}
+                params
             )
 
             if data:
+                data['limit'] = limit
+
+                if 'next_href' not in data:
+                    data['next_href'] = None
+
+                if first_page:
+                    user_data = proxy_soundcloud(f'/users/{urn}', {})
+                    if user_data:
+                        data.update(like_count_fields(user_data))
+
                 return cors(200, data)
             
             return cors(400, 'USER_LIKES_ERROR')
@@ -318,7 +382,9 @@ def lambda_handler(event: APIGatewayProxyEventV1, context: context_.Context) -> 
                 'status': 'ok',
                 'client_id': client_id[:8] + '...' if client_id else 'NO client_id FOUND',
                 'rate_limit_seconds': RATE_LIMIT_SECONDS,
-                'client_id_ttl_seconds': CLIENT_ID_TTL_SECONDS
+                'client_id_ttl_seconds': CLIENT_ID_TTL_SECONDS,
+                'likes_limit_default': LIKES_LIMIT_DEFAULT,
+                'likes_limit_max': LIKES_LIMIT_MAX
             }
             return cors(200, info)
 
@@ -332,7 +398,7 @@ def lambda_handler(event: APIGatewayProxyEventV1, context: context_.Context) -> 
                 },
                 {
                     'endpoint': '/likes',
-                    'params': ['urn']
+                    'params': ['urn', 'limit', 'offset']
                 },
                 {
                     'endpoint': '/health',

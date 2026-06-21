@@ -10,9 +10,9 @@ SoundCloud already has a public API but does not have CORS enabled for it, so th
 
 The static frontend is hosted on GitHub Pages and communicates with the Lambda proxy.
 
-The limit currently for likes is 50,000. This is an arbitrary amount set by me. If 50,000 is somehow not enough for you, raise a GitHub issue with a use case to justify it.
+SoundCloud returns likes in linked partitions. The Lambda requests one partition at a time with `limit=200`, returns SoundCloud's `next_href`, and the frontend extracts the next `offset` from that URL. The page waits 1.25 seconds after each likes response before requesting the next partition.
 
-Additionally, if not using filters and the total number of likes is less than 50,000 while also reporting having fewer than your total likes, those will be songs that have been deleted/privated.
+The estimated total comes from `public_favorites_count` when SoundCloud returns it, falling back to `likes_count`. The fetched total can be lower when liked tracks were deleted or made private.
 
 ## Why not request a developer app and use OAuth 2.0?
 
@@ -35,7 +35,7 @@ I did, they haven't gotten back to me yet (I had to talk to an AI chatbot) so th
 AWS CLI: https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html<br />
 AWS SAM CLI: https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/install-sam-cli.html
 
-You can find `.msi` installers (as well as installers for other systems) linked on each
+You can find `.msi` installers (as well as installers for other systems) linked on each.
 
 If you haven't set up AWS CLI yet, grab your credentials from AWS Management Console:
 
@@ -326,20 +326,24 @@ Resolves a SoundCloud username to info used by **index.html**.
 /username?username=someuser
 ```
 
-Returns: `id`, `urn`, `username`, `permalink_url`, `avatar_url`
+Returns: `id`, `urn`, `username`, `permalink_url`, `avatar_url`, `public_favorites_count`, `likes_count`, `likes_estimate`
 
 ### GET /likes
 
-Returns a user's liked tracks.
+Returns one page of a user's liked tracks.
 
 ```
-/likes?urn=93060898&limit=1000
+/likes?urn=93060898
+/likes?urn=93060898&limit=200&offset=2026-05-22T11%3A10%3A44.237Z%2Cuser-track-likes%2C000-00000000000093060898-00000000002312520977
 ```
 
 - `urn`: numeric user id from the urn field
-- `limit`: max likes to return (default: all, i.e. 50000)
+- `limit`: likes to request per page, default 200, max 200
+- `offset`: optional offset token extracted from the previous response's `next_href`
 
-If this limit is somehow not enough for you, raise an issue with a use case to justify it.
+The Lambda sends `linked_partitioning=1` to SoundCloud. The response includes SoundCloud's `collection`, `next_href`, and `query_urn`, plus the `limit` used by the Lambda. First-page responses also include `public_favorites_count`, `likes_count`, and `likes_estimate`.
+
+Keep requesting the next page until `next_href` is `null`.
 
 ### GET /health
 
@@ -351,7 +355,7 @@ CORS preflight. Returns HTTP 200.
 
 ## Rate Limiting
 
-**handler.py** enforces a global rate limit (default 1 req/sec across all users) to avoid concerns with hitting SoundCloud too hard, especially with the limit being a default of all likes. If rate limited, wait and retry. I don't suspect enough people to use this to matter though.
+**handler.py** enforces a global rate limit (default 1 req/sec across all users). The frontend waits 1.25 seconds between likes page requests. If rate limited, wait and retry.
 
 ## Notes
 
