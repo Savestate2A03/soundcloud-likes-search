@@ -55,11 +55,7 @@ sam build && sam deploy --guided
 The guided deploy will prompt for stack name and parameters. When asked:
 > SoundcloudProxyFunction has no authentication. Is this okay? [y\/N]:
 
-Make sure to answer with `y`. Defaults are generally going to be fine for other prompts.
-
-Note what `ApiUrl` is after deploying as you will need to provide it to the frontend / GitHub.
-
-This is also how you re-deploy the environment on top of the existing one.
+Make sure to answer with `y`. Defaults are generally going to be fine for other prompts. Note what `ApiUrl` is after deploying as you will need to provide it to the frontend / GitHub.
 
 #### Example deployment output
 
@@ -237,6 +233,14 @@ Successfully created/updated stack - soundcloud-proxy in us-east-1
 
 </details>
 
+### Re-deploy
+
+Remove guided once you have successfully deployed once:
+
+```sh
+sam build && sam deploy
+```
+
 ### Debugging Logs
 
 You can debug logs with AWS SAM:
@@ -308,7 +312,7 @@ To start the API on port 3000 locally:
 sam local start-api
 ```
 
-However, this requires Docker.
+However, this requires Docker. (sorry)
 
 Alternatively, edit `API_BASE` in **index.html** to point to any endpoint.
 

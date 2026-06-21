@@ -3,7 +3,7 @@
   <head>
     <title>Soundcloud Likes Search</title>
     <meta charset="utf-8">
-    <meta name="viewport" content="width=700px">
+    <meta name="viewport" content="width=720px">
     <style>
       @media screen and (max-device-width: 480px) {
         body {
@@ -378,14 +378,14 @@
         <div id="search">
           <div>
             <label for="username">Username:</label>
-            <input type="text" id="username" placeholder="Username" required onkeydown="if(event.key === 'Enter') search()">
+            <input type="text" id="username" placeholder="username" required onkeydown="if(event.key === 'Enter') search()">
           </div>
           <div>
             <label for="filter">Filter:</label>
             <input type="text" id="filter" placeholder="title/artist/tags" oninput="apply_filter()" onkeydown="if(event.key === 'Enter') search()">
           </div>
           <div>
-            <input type="submit" onclick="search()" value="Search / List">
+            <input type="submit" onclick="search()" value="Get Likes">
           </div>
         </div>
       <div id="status"></div>
